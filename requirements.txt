@@ -1,0 +1,12 @@
+# Verified on macOS 15 (Apple Silicon), Python 3.13.
+# Install into a venv created with --system-site-packages if torch is already
+# present system-wide, otherwise plain `python3 -m venv .venv` is fine.
+
+ultralytics==8.4.158
+opencv-python==4.13.0.92   # NOT opencv-python 5.x: see note in audio.py
+numpy==2.5.3
+torch>=2.5                 # 2.10.0 tested
+sounddevice==0.5.2         # audio backend; pygame is deliberately not used
+PyYAML>=6.0
+Pillow>=10.0
+reportlab>=4.0             # only needed by tools/make_print.py

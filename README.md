@@ -66,13 +66,13 @@ the working distance), `--windowed`, `--mute`, `--lang en`,
 
 ## 2. The two posters — the actual point
 
-Children get **two posters of identical size** and must guess which one is
-magic:
+| **A — the magic poster** | **B — the decoy** |
+|---|---|
+| <img src="docs/img/poster_a.png" width="300"> | <img src="docs/img/poster_b.png" width="300"> |
+| Trained to drive one output class of the detector. The box vanishes. | An ordinary photograph of a very similar dog. Nothing happens. |
 
-| Poster | What it is | What it does |
-|---|---|---|
-| **A** | the trained patch | the box disappears |
-| **B** | an ordinary photo of a very similar fluffy dog | nothing |
+Children get the two posters at **identical size** and must guess which one is
+magic.
 
 Do not skip B. Without it children conclude they are simply hiding behind
 cardboard. With it, the lesson lands: *it is not about covering yourself up, it
@@ -82,6 +82,38 @@ B is deliberately the **same breed, same framing** as A, so the posters cannot
 be told apart by subject — only by pattern. And B has measured `0.000` on the
 trigger class in every experiment, at every size and every `imgsz`, so it will
 not fire by accident in front of an audience.
+
+### Printing them
+
+```bash
+.venv/bin/python tools/make_print.py --paper A4     # or --paper A3
+```
+
+That writes `print/posters_A4.pdf`, **two pages: page 1 is A, page 2 is B.**
+
+- **A4, matte paper**, mounted on foam board or stiff card. Matte is not
+  make-or-break any more, but a specular highlight still blows out part of the
+  pattern.
+- **Print at 100% — no "fit to page".** Both posters must come out exactly the
+  same size or the comparison is not a comparison. Check the printed square
+  with a ruler: **18 cm** on A4, 26 cm on A3. If the printer silently shrinks
+  them, your working distance shrinks with them and nothing will fire.
+- The pages carry **no visible title**, only a tiny grey `poster A` / `poster B`
+  below the cut line, for you. The children must not be able to read which is
+  which.
+- **Print two copies of A.** It is the one a hundred children will handle, and
+  a creased, finger-marked magic poster is a demo that quietly stops working
+  halfway through the afternoon.
+
+How far the children can stand depends on the paper size and `model.imgsz`:
+
+| paper | printed square | works out to (`imgsz: 1280`) | (`960`) |
+|---|---|---|---|
+| A3 | 26 cm | 2.9 m | 2.1 m |
+| **A4 (default)** | **18 cm** | **2.0 m** | 1.4 m |
+
+Full staging notes, including how to find the spot and tape the floor, are in
+[`print/README.md`](print/README.md).
 
 ## 3. Modes
 

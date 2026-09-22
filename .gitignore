@@ -1,0 +1,39 @@
+# ---------------------------------------------------------------- python ---
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# ------------------------------------------------------------ large, but ---
+# ------------------------------------------- reproducible: fetch or rebuild ---
+
+# Model weights (~45 MB). Get them with:  python tools/fetch_assets.py
+assets/models/*.pt
+
+# Test fixtures used by tools/. Same command fetches these.
+assets/testimg/
+
+# Printables are generated from the patch, and posters_*.pdf is 25 MB each:
+#     python tools/make_print.py --paper A4
+print/*.pdf
+
+# ------------------------------------------------------------- generated ---
+# Sprites, sounds and the noise poster: python tools/make_assets.py
+# (kept in the repo -- they are small and it is nice to clone-and-run)
+
+# --------------------------------------------------------------- privacy ---
+# Fallback content is built from photographs of real people, and the clip is
+# 5 MB. Rebuild locally with:  python tools/make_fallback.py --img-dir <photos>
+assets/fallback/loop.mp4
+assets/fallback/stills/*
+!assets/fallback/stills/.gitkeep
+
+# The demo itself writes nothing, but make sure a stray capture never lands
+# in a commit.
+*.mp4
+*.mov
+*.avi
+
+# ------------------------------------------------------------------- misc ---
+.DS_Store
+*.log

@@ -1,8 +1,8 @@
 """INVISIBLE! -- can you hide from the robot?
 
-A science-fair demo for children: a YOLO detector boxes the child, the child
-raises a poster, the box pops like a soap bubble, a timer counts how long they
-stayed invisible.
+A science-fair demo: a YOLO detector boxes the user, the user raises a poster,
+the box pops like a soap bubble, and a timer counts how long they stayed
+invisible.
 
     python app.py --lang it
 
@@ -224,7 +224,7 @@ class Show:
         self.patches = self._load_patches()
         if self.trigger == "neuron":
             log.warning("NEURON TRIGGER: the box is fired by class %d rising "
-                        "above %.2f, not by the detector losing the child.",
+                        "above %.2f, not by the detector losing the user.",
                         self._trig_class, self._trig_conf)
         self.camera: Camera | None = None
         self.fallback = FallbackSource(os.path.join(ROOT, cfg["fallback"]["video"]),
@@ -280,7 +280,7 @@ class Show:
                 self._tick()
             except KeyboardInterrupt:
                 break
-            except Exception as exc:  # the show must never die in front of a child
+            except Exception as exc:  # the show must never die in front of an audience
                 log.exception("frame failed, continuing: %s", exc)
                 time.sleep(0.05)
 
@@ -324,11 +324,11 @@ class Show:
 
     # -- the important part ------------------------------------------------
     def _process(self, frame: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        """Return (what the child sees, what the detector was given).
+        """Return (what the user sees, what the detector was given).
 
         In virtual mode the poster is warped in FIRST, and that composited frame
         is what YOLO sees. The left-hand panel shows the untouched camera so the
-        audience can tell the child never actually disappeared.
+        audience can tell the user never actually disappeared.
         """
         clean = frame
         detect_frame = frame
@@ -370,7 +370,7 @@ class Show:
         if quad is not None and self.args.show_board:
             draw_board_outline(robot, quad, self.colors["good"], 3)
 
-        # Mirror for display only, and mirror the boxes to match, so the child
+        # Mirror for display only, and mirror the boxes to match, so the user
         # sees themselves the right way round and no overlay text comes out
         # backwards.
         if self.mirror:
@@ -535,7 +535,7 @@ class Show:
                                f"{self.S.get('threshold')} "
                                f"{int(float(self.cfg['model']['conf'])*100)}%")
         # Only say something when there is something to say: the camera is down,
-        # or the marker board is missing. Naming the mode told the child nothing.
+        # or the marker board is missing. Naming the mode told the user nothing.
         line2 = ""
         if using_fallback:
             line2 = self.S.get("mode_fallback")
@@ -684,7 +684,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--lang", choices=("it", "en"), default=None)
     ap.add_argument("--mode", choices=("physical", "virtual", "fallback"),
                     default="physical",
-                    help="physical (default): the child holds the real printed "
+                    help="physical (default): the user holds the real printed "
                          "poster and the app reads it. virtual: a white ArUco "
                          "board, and the operator picks the image with 1/2.")
     ap.add_argument("--camera", type=int, default=None,
@@ -696,7 +696,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--mute", action="store_true")
     ap.add_argument("--trigger", choices=("detector", "neuron"), default=None,
                     help="detector = the box goes when YOLO really loses the "
-                         "child; neuron = the class poster A was trained to "
+                         "user; neuron = the class poster A was trained to "
                          "light up fires it")
     ap.add_argument("--show-board", action="store_true",
                     help="outline the detected marker board (setup aid)")

@@ -8,9 +8,8 @@ the "magic" patch, an ordinary dog photo, random noise and a plain grey square
 all suppress person confidence by about the same amount.
 
 That is **occlusion**, not an adversarial attack. A demo built on it would fail
-twice over: the box would never actually vanish, and the two decoy posters would
-work as well as the magic one — which destroys the entire point of the three
-posters.
+twice over: the box would never actually vanish, and the decoy poster would work
+as well as the magic one — which destroys the entire point of having a decoy.
 
 So we train our own patch against the exact weights we ship.
 
@@ -44,7 +43,7 @@ noise is as effective as the published patch.
 
 The paper reports **mAP over a dataset**. A drop in mAP can coexist with "the
 largest, closest person is still detected at 0.5 confidence". This demo needs
-something much stronger and much more specific: *this one child, at two metres,
+something much stronger and much more specific: *this one person, at two metres,
 must fall below threshold within a second, reliably.* Those are different asks,
 and the published numbers were never a promise about the second one.
 
@@ -63,13 +62,12 @@ directly — the same thing the cited papers do, just against the model we
 actually deploy. It stays a *naturalistic* patch:
 
 - **initialised from and anchored to** `exp53` (a fluffy dog face), so it still
-  reads as "a silly dog poster" to a seven-year-old rather than as abstract
-  static — which also matters because decoy poster C *is* random noise;
+  reads as "a silly dog poster" rather than as abstract static;
 - **EOT**: random scale (0.22–0.42), rotation (±22°), position jitter,
   brightness/contrast jitter and sensor noise, so it survives being held by a
-  wobbling child under fair lighting;
-- **TV + non-printability losses**, so the same file works printed on A3
-  (Mode A) as well as warped in digitally (Mode B).
+  wobbling user under fair lighting;
+- **TV + non-printability losses**, so the same file works printed (Mode A) as
+  well as warped in digitally (Mode B).
 
 The anchor term turns out not to be the binding constraint — the adversarial
 signal rides *on top of* the dog rather than replacing it — so the patch keeps
@@ -84,6 +82,9 @@ Measured end to end through the shipping path (`tools/validate_demo.py`: stage a
 real ArUco board at chest height, `BoardTracker` -> `warp_into` -> `Detector`),
 with the first patch, trained on whole photos:
 
+*(Measured while the demo still shipped three posters; C was a random-noise
+decoy, dropped later. Kept as recorded.)*
+
 | poster | board = 0.30 x body height | 0.40 | 0.50 |
 |---|---|---|---|
 | A magic (COCO-framed training) | 0% | 11% | 14% |
@@ -94,7 +95,7 @@ with the first patch, trained on whole photos:
 model, same threshold.
 
 The reason is resolution, not geometry. COCO persons are mostly small, so in the
-detector's 640px input the patch was rendered at perhaps 40-120 px. A child at
+detector's 640px input the patch was rendered at perhaps 40-120 px. A user at
 two metres fills the frame, and the same poster arrives at ~180-250 px. The
 adversarial structure lives at particular spatial frequencies; render it at
 double the size and the attack largely evaporates. Randomising the patch's
@@ -104,7 +105,7 @@ what changed.
 The fix is `tools/framing.py`: both the trainer and the validator re-crop every
 photo so the person fills 55-92% of the frame height, which is what the camera
 will hand the detector on the day. The trainer randomises that fill per sample,
-so the patch is optimised across the range of distances a child might stand at.
+so the patch is optimised across the range of distances a user might stand at.
 
 **The general lesson, and the reason the end-to-end validator exists:** validate
 through the code path you ship, on the input distribution you will actually see.
@@ -117,6 +118,8 @@ Final measurement, end to end through the shipping path
 (`tools/validate_demo.py`, 60 held-out photos, threshold 0.4), with the patch
 trained at demo framing and deployment letterboxing, and the enlarged poster
 area:
+
+*(Three-poster era; C was the random-noise decoy, since dropped.)*
 
 | poster | board = 0.35 x body height | 0.45 | 0.55 |
 |---|---|---|---|
@@ -141,8 +144,9 @@ the bare patch, a physically larger board, a smaller detector input size, and
 simply training much longer -- the adversarial loss never converged at this
 framing.
 
-Because of this, the app ships a **simulation mode** (off by default, see the
-README). That mode is a show, not a measurement, and the two should not be
+Because of this, evasion is **not** what ships. `--trigger detector` still runs
+it, and `S` switches to it live, but the default is the signalling approach
+below. That default is a show, not a measurement, and the two should not be
 confused -- which is the reason this file exists.
 
 ## Third approach: stop attacking, start signalling
@@ -173,17 +177,40 @@ does not occur in the world.
 
 What this is and is not: the poster really is a real, optimised, model-specific
 pattern that really does control the model's output. It is not an attack, and
-the child is not invisible. Say so if asked.
+the user is not invisible. Say so if asked.
 
-Two dead ends recorded so the next person does not repeat them: training only on
-small scales made the signal *worse* (0.24 peak vs 0.96), because a handful of
-pixels cannot carry the pattern; and raising the camera resolution does nothing,
-because the frame is resized to `imgsz` before the model ever sees it.
+### `imgsz` mattered more than any amount of training
+
+The single largest improvement in the whole project was a config line, not a
+training run. At the original `imgsz: 640` the class stayed faint (0.24) unless
+the poster was enormous. Measured with the poster held by hand, no markers, the
+decoy at `0.000` in every cell:
+
+| `imgsz` | fires from | strength | ms/frame | A4 (18 cm) works to |
+|---|---|---|---|---|
+| 640 | 300 px | 0.24-0.36 | 17 | — |
+| 960 | 140 px | 0.83-0.98 | 19 | 1.4 m |
+| **1280 (shipped)** | **100 px** | **0.91-1.00** | **27** | **2.0 m** |
+
+Two milliseconds bought the difference between "faint" and "confident". It is
+worth checking the cheap knobs before spending an hour on gradient descent.
+
+### Dead ends, recorded so nobody repeats them
+
+- **Training only on small scales** made the signal *worse* (0.24 peak vs 0.96):
+  a handful of pixels cannot carry the pattern.
+- **Raising the camera resolution** does nothing. The frame is resized to
+  `imgsz` before the model sees it, so only the poster's *fraction* of the frame
+  matters.
+- **Anchoring hard to the reference dog** (`--w-anchor 5`) keeps the poster
+  looking like an ordinary photo but costs signal strength. At 1.5 it drifts
+  into DeepDream territory and is unmistakable next to the decoy — which is a
+  fair trade for a demo, but it does weaken "you cannot tell by looking".
 
 ## Honesty notes to keep saying out loud
 
 - This patch is **model-specific**. Expert mode (`E`) exists to show exactly
-  that: a newer detector the patch never saw keeps detecting the child.
+  that: a newer detector the patch never saw keeps detecting the user.
 - It is **scale-specific**. Hence the tape mark on the floor.
 - Reproduce any of this yourself:
 

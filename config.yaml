@@ -2,7 +2,7 @@
 # The operator should only ever need to touch `camera`, `ui.lang` and `patch.active`.
 
 model:
-  # The detector the children are fooling. MUST match patch.target_model below.
+  # The detector the posters act on. MUST match patch.target_model below.
   name: yolov8n
   weights: assets/models/yolov8n.pt
   device: mps            # mps | cpu | cuda
@@ -28,13 +28,13 @@ patch:
   active: adversarial
   images:
     # Two posters: the magic one and an ordinary photo of the SAME breed, so the
-    # children cannot tell them apart by subject -- only the pattern differs.
+    # user cannot tell them apart by subject -- only the pattern differs.
     adversarial: assets/patches/magic_dog.png
     dog: assets/decoys/dog_photo.jpg
 
 trigger:
   # What makes the box vanish.
-  #   detector -- the honest one: the box goes when YOLO really loses the child.
+  #   detector -- the honest one: the box goes when YOLO really loses the user.
   #               Measured ~30% of the time (see docs/PATCH_NOTES.md).
   #   neuron   -- poster A is trained to drive ONE output class hard. The box is
   #               fired by that class appearing. It is not an attack: the patch

@@ -184,6 +184,21 @@ being fooled, the honest answer is *"no — the poster is really controlling the
 model's output, but by shouting, not by hiding. Here's the version that actually
 hides."* Press `S` and show them.
 
+### Which one runs by default
+
+**`neuron`** — the simulated one. That is the shipping default
+(`trigger.mode: neuron` in `config.yaml`) because it works every time in front
+of a queue.
+
+`--trigger detector` runs the genuine attack instead, and **`S` switches
+between them live**, without restarting. The startup log always tells you which
+is active:
+
+```
+WARNING invisible: NEURON TRIGGER: the box is fired by class 78 rising above
+0.20, not by the detector losing the user.
+```
+
 ### Why not just do the real attack?
 
 Because it does not work well enough. A patch trained to suppress the person
@@ -191,8 +206,6 @@ class managed **27–31%** of attempts against a close-up subject, versus 12–1
 for a decoy poster — real, roughly double the decoy, and nowhere near something
 you can put in front of a queue. `docs/PATCH_NOTES.md` has the numbers, the two
 train/deploy traps that cost the most time, and the dead ends.
-
-`--trigger detector` runs that honest version. `S` switches live.
 
 ### The operating point — the part to get right
 

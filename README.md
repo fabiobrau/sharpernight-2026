@@ -1,8 +1,10 @@
 # INVISIBLE! — Can you hide from the robot?
 
-A live, kid-facing science-fair demo: a YOLO detector boxes a child, the child
+A live science-fair demo: a YOLO detector draws a box around the user, the user
 raises a printed poster, and the box **pops like a soap bubble**. A timer counts
 how long they stayed invisible; the best times of the day go on a board.
+
+Built for visitors aged 6-12 and the parents reading over their shoulder.
 
 Runs on an Apple Silicon Mac, **offline**, and **writes nothing to disk** — no
 frames, no video, no faces.
@@ -53,7 +55,7 @@ build. `tools/make_assets.py` regenerates them if you want to change them.
 | `F` | toggle fullscreen |
 | `R` | reset the scoreboard |
 | `E` | expert mode — run a second, newer detector side by side |
-| `S` | switch trigger: real detector ⇄ neuron (§4b) |
+| `S` | switch trigger: real detector ⇄ neuron (§4) |
 | `V` | manual force-vanish, any mode — the operator's override |
 | `1` `2` `0` | *`--mode virtual` only*: pick which image is warped in (magic / dog / none) |
 
@@ -71,10 +73,10 @@ the working distance), `--windowed`, `--mute`, `--lang en`,
 | <img src="docs/img/poster_a.png" width="300"> | <img src="docs/img/poster_b.png" width="300"> |
 | Trained to drive one output class of the detector. The box vanishes. | An ordinary photograph of a very similar dog. Nothing happens. |
 
-Children get the two posters at **identical size** and must guess which one is
+Users get the two posters at **identical size** and must guess which one is
 magic.
 
-Do not skip B. Without it children conclude they are simply hiding behind
+Do not skip B. Without it people conclude they are simply hiding behind
 cardboard. With it, the lesson lands: *it is not about covering yourself up, it
 is about one very specific pattern built for this one robot.*
 
@@ -99,13 +101,13 @@ That writes `print/posters_A4.pdf`, **two pages: page 1 is A, page 2 is B.**
   with a ruler: **18 cm** on A4, 26 cm on A3. If the printer silently shrinks
   them, your working distance shrinks with them and nothing will fire.
 - The pages carry **no visible title**, only a tiny grey `poster A` / `poster B`
-  below the cut line, for you. The children must not be able to read which is
+  below the cut line, for you. The user must not be able to read which is
   which.
-- **Print two copies of A.** It is the one a hundred children will handle, and
+- **Print two copies of A.** It is the one a hundred people will handle, and
   a creased, finger-marked magic poster is a demo that quietly stops working
   halfway through the afternoon.
 
-How far the children can stand depends on the paper size and `model.imgsz`:
+How far back the user can stand depends on the paper size and `model.imgsz`:
 
 | paper | printed square | works out to (`imgsz: 1280`) | (`960`) |
 |---|---|---|---|
@@ -119,8 +121,8 @@ Full staging notes, including how to find the spot and tape the floor, are in
 
 ### Mode A — real printed poster (**the default**)
 
-The child picks a poster, holds it up, and the app reads which one it is from
-the image. No markers, no compositing, no keypress — and the *child* chooses,
+The user picks a poster, holds it up, and the app reads which one it is from
+the image. No markers, no compositing, no keypress — and the *user* chooses,
 not the operator.
 
 This is what you want. It was measured to work better than the marker board in
@@ -130,7 +132,7 @@ on markers. See `print/README.md` for the staging.
 
 ### Mode B — virtual poster (`--mode virtual`)
 
-The child holds a white board with four ArUco markers. Each frame the app finds
+The user holds a white board with four ArUco markers. Each frame the app finds
 the markers, computes a homography, **warps the chosen poster into the board
 region, and only then runs YOLO on the composited frame.** Keys `1`/`2` pick
 which image gets warped in, `0` for none.
@@ -139,151 +141,135 @@ which image gets warped in, `0` for none.
 > *after* detection would be a fake demo. See `Show._process` in `app.py`.
 
 Its original advantage was immunity to printing, glare and lighting — which the
-neuron trigger (§4b) made largely moot. Keep it as the fallback for when the
+neuron trigger (§4) made largely moot. Keep it as the fallback for when the
 printed posters get lost, creased or rained on.
 
 ### Mode C — fallback (`--mode fallback`)
 
 Loops a recorded clip from `assets/fallback/loop.mp4` and/or stills from
 `assets/fallback/stills/`. The app also falls back automatically if the camera
-disappears. **A child never sees a Python traceback.**
+disappears. **Nobody ever sees a Python traceback.**
 
 Neither is in the repo (they are built from photographs of real people):
 rebuild with `tools/make_fallback.py --img-dir <folder of photos>`.
 
-## 4. Patches and the model — read this first
+## 4. What the poster actually is — read this first
 
-**A patch only fools the model it was optimised against.**
+Poster A is an image that was **optimised so that one output neuron of the
+detector fires as hard as possible**. The neuron is class 78, `hair drier`,
+picked because no hair drier will ever be in front of the camera at a science
+fair. When the app sees that class appear, it makes the box vanish.
 
-`config.yaml` records `patch.target_model`. If it disagrees with
-`model.name`, the app **refuses to start** with an explanation rather than
-silently doing nothing.
+### This simulates an adversarial attack. It is not one.
 
-The shipped patch `assets/patches/magic_dog.png` was trained here against
-`yolov8n` — the exact weights in `assets/models/yolov8n.pt`.
+Say that plainly, because the difference matters:
 
-> The published patches from Hu et al. (ICCV 2021) and the Ultralytics follow-up
-> were measured against these weights and behave as **plain occlusion** — a dog
-> photo, random noise and a grey square suppress person confidence by the same
-> amount. Full numbers and reasoning: [`docs/PATCH_NOTES.md`](docs/PATCH_NOTES.md).
+|  | a real adversarial attack | what this does |
+|---|---|---|
+| Goal | make the detector **fail to see a person** | make one unrelated class **light up** |
+| Difficulty | hard — you are fighting the model at what it is good at | easy — you are asking it to do something it is happy to do |
+| Reliability here | **~30%** of attempts | **~100%** |
+| The box vanishes because… | the detector genuinely lost the person | the app read a signal and switched it off |
 
-To retrain (e.g. for different weights, or after changing the model):
+The poster is not a trick picture and not a hardcoded `if`. It is a real,
+optimised, model-specific pattern that genuinely controls the model's output —
+gradient descent on the actual weights we ship, same EOT and printability
+machinery a real patch needs. What it does *not* do is hide anybody. The person
+stays perfectly visible to the detector; we are reading a flag the poster
+raises, and choosing to hide the box ourselves.
+
+So: the **effect** the audience sees is staged, while the **mechanism** that
+triggers it is real. If a parent or a teacher asks whether the robot is really
+being fooled, the honest answer is *"no — the poster is really controlling the
+model's output, but by shouting, not by hiding. Here's the version that actually
+hides."* Press `S` and show them.
+
+### Why not just do the real attack?
+
+Because it does not work well enough. A patch trained to suppress the person
+class managed **27–31%** of attempts against a close-up subject, versus 12–19%
+for a decoy poster — real, roughly double the decoy, and nowhere near something
+you can put in front of a queue. `docs/PATCH_NOTES.md` has the numbers, the two
+train/deploy traps that cost the most time, and the dead ends.
+
+`--trigger detector` runs that honest version. `S` switches live.
+
+### The operating point — the part to get right
+
+The neuron only fires once the poster is big enough **in the detector's input**,
+and `model.imgsz` matters more than anything else. Measured with the poster held
+by hand, no markers; the decoy sat at `0.000` in every single cell.
+
+| `imgsz` | fires from | ms/frame | A4 (18 cm) works to | A3 (26 cm) |
+|---|---|---|---|---|
+| 640 | 300 px, weakly | 17 | — | ~1.0 m |
+| 960 | 140 px | 19 | 1.4 m | 2.1 m |
+| **1280 (default)** | **100 px** | **27** | **2.0 m** | **2.9 m** |
+
+Distances assume a ~60° webcam. Find yours with `--show-fps` and tape the floor.
+
+Two more things:
+
+- **Latching.** The class fires on roughly half the frames, not all, so
+  `trigger.latch_frames` holds the effect for a few frames after the last hit.
+  Twelve turns an intermittent signal into a steady one.
+- **In `--mode virtual` the board spends a third of its side on markers**, so
+  the pattern lands smaller than the board suggests and you must stand closer.
+
+**Things that do NOT help**, so you do not waste an afternoon on them: raising
+the camera resolution (the frame is resized to `imgsz` regardless, so only the
+poster's *fraction* of the frame matters), and training only on small scales
+(tried — it got worse; too few pixels to carry the pattern).
+
+`V` is a manual force-vanish, any mode, any time — the operator's override for
+when everything else is having a bad day.
+
+### The model guard
+
+**A pattern only works on the model it was optimised against.** `config.yaml`
+records `patch.target_model`; if it disagrees with `model.name` the app
+**refuses to start** with an explanation rather than silently doing nothing.
+
+The shipped `assets/patches/magic_dog.png` was trained against `yolov8n` — the
+exact weights `fetch_assets.py` puts in `assets/models/`.
+
+### Retraining
 
 ```bash
 # -u matters: without it Python buffers and you see no progress for 15 minutes
 PYTORCH_ENABLE_MPS_FALLBACK=1 .venv/bin/python -u tools/train_patch.py \
+    --objective neuron --target-class 78 \
     --steps 3000 --images 900 --img-dir /path/to/photos_of_people
 ```
 
-Training deliberately mirrors deployment: photos are re-cropped so the person
-fills 55-92% of the frame (`tools/framing.py`), then letterboxed to 640x384
-exactly as ultralytics does to a 1280x720 camera frame. Both details were
-necessary — see `docs/PATCH_NOTES.md`.
+Drop `--objective neuron` to train a genuine evasion patch instead.
 
-Then update `patch.target_model` in `config.yaml` and re-run
-`tools/make_print.py`.
+Training mirrors deployment on purpose: photos are re-cropped so the person
+fills 55–92% of the frame (`tools/framing.py`), then letterboxed to 640×384
+exactly as ultralytics does to a 1280×720 camera frame. Both details turned out
+to be necessary — see `docs/PATCH_NOTES.md`.
 
-To re-measure any patch against any model:
+Afterwards, re-run `tools/make_print.py` so the printed poster matches.
+
+To re-measure anything:
 
 ```bash
-# quick: paste the patch on detected people, compare against the decoys
+# paste a patch on detected people, compare against the decoy
 .venv/bin/python tools/validate_patch.py --models yolov8n,yolov10n
 
-# the one that counts: stages a real ArUco board at chest height and drives the
-# actual shipping path (BoardTracker -> warp_into -> Detector) at demo framing
+# the one that counts: drives the real shipping path at demo framing
 .venv/bin/python tools/validate_demo.py --img-dir /path/to/photos_of_people
 ```
 
-Two traps are documented in `docs/PATCH_NOTES.md` and both were hit here:
-published patches that behave as plain occlusion, and a patch that measures well
-on dataset-framed photos then fails on a close-up child. **Validate through the
-path you ship, at the framing you will actually see.**
+**Validate through the path you ship, at the framing you will actually see.**
+Both traps in `docs/PATCH_NOTES.md` were invisible to a metric one step removed
+from the demo.
 
 ### Expert mode (`E`)
 
 Runs a second, newer detector (`yolov10n`) on the same frame and shows it still
-detecting the child. This is the honest caveat — adversarial patches are
-model-specific, not an invisibility cloak — and older children and parents
-love it.
-
----
-
-## 4b. The two triggers
-
-What makes the box vanish is a choice, set by `trigger.mode` in `config.yaml`
-or `--trigger`, and switchable live with `S`.
-
-### `detector` — the honest one (default)
-
-The box goes when YOLO genuinely loses the child. Measured at roughly **30%**
-of attempts (`docs/PATCH_NOTES.md`). Real, but it will disappoint two children
-out of three.
-
-### `neuron` — the reliable one
-
-Poster A is trained to **drive one output class of the model very hard** —
-class 78, `hair drier`, which will never be in front of the camera at a science
-fair. The box is fired by that class appearing above `trigger.threshold`.
-
-This is not an attack, and it is not a hardcoded `if`. The poster is a real,
-optimised, model-specific pattern; it just *signals* rather than *evades*.
-Making a neuron shout is far easier than beating a detector at its own job,
-which is why it is reliable where evasion is not.
-
-What that buys:
-
-- **No keypress.** The trigger comes from the image, so it works with a printed
-  poster (Mode A) exactly as it does with a warped one.
-- **The decoy cannot fire it.** Measured at **0.000, exactly**, on every
-  held-out image — as does an empty board, a hand, or a wall. The three-poster
-  lesson holds by construction rather than because somebody wrote it into a
-  branch.
-- **It costs nothing.** The class is read from the same detection pass that
-  already finds the child: `classes=[0, 78]`, one forward pass.
-
-### The operating point — this is the part to get right
-
-The class only fires once the poster is big enough **in the detector's input**,
-and `model.imgsz` matters more than anything else. Measured, with the decoy at
-`0.000` in every single cell:
-
-| `imgsz` | fires from | strength | ms/frame | A3 board works at |
-|---|---|---|---|---|
-| 640 | 300 px | 0.24-0.36 (weak) | 17 | ~1.0 m |
-| **960 (default)** | **220 px** | **0.83-0.98** | **19** | **~1.3 m** |
-| 1280 | 180 px | 0.81-0.97 | 27 | ~1.6 m |
-
-640 was the original setting and it is simply too coarse: the trigger stays
-faint until the poster is enormous. 960 costs two milliseconds and makes it
-confident. Go to 1280 if you need the children standing further back; it still
-clears 20 fps.
-
-Two more things:
-
-- **The board spends a third of its side on markers**, so the patch lands
-  smaller than you would guess from the poster. A bigger board buys distance
-  just as effectively as a bigger `imgsz`.
-- **Latching.** The class fires on roughly half the frames rather than all of
-  them, so `trigger.latch_frames` holds the effect for a few frames after the
-  last hit. Twelve frames turns an intermittent signal into a steady one.
-
-Distances assume a ~60 deg webcam; find yours and put tape on the floor.
-
-**Things that do NOT help**, so you do not waste time on them: raising the
-camera resolution (the frame is resized to `imgsz` regardless, so only the
-poster's *fraction* of the frame matters), and training the patch only on small
-scales (tried; it got worse -- too few pixels to encode the pattern in).
-
-`V` is a manual force-vanish, any mode, any time — the operator's override if
-everything else is having a bad day.
-
-### Saying it straight
-
-With `neuron`, the screen is not showing a detector being fooled. If a parent or
-a teacher asks, the true answer is "the poster is really controlling the model's
-output — just not by hiding the child; here's the version that does that," and
-then `E` (expert mode) and `docs/PATCH_NOTES.md` give you something measured to
-show them.
+detecting the person. Older visitors and parents like it, and it makes the
+model-specific point without a word.
 
 ---
 
@@ -298,7 +284,7 @@ show them.
 +--------------------------------------------------------+
 ```
 
-Side by side is what sells it: the child is obviously still there, and the
+Side by side is what sells it: the user is obviously still there, and the
 robot's half of the screen is empty.
 
 ---
@@ -317,7 +303,7 @@ robot's half of the screen is empty.
 
 Nothing is written to disk. There is no `save()` anywhere in the capture path,
 the scoreboard lives in memory only and dies with the process, and the on-screen
-footer says so in words a parent can read from behind their child.
+footer says so in words a parent can read over the user's shoulder.
 
 ---
 
@@ -370,7 +356,7 @@ Measured, not assumed. Every row names the command that reproduces it.
 
 | Criterion | Status |
 |---|---|
-| Box appears within 1 s of a child walking up | **Yes** — detection is per-frame at 24 fps (`tools/soak_test.py`) |
+| Box appears within 1 s of someone walking up | **Yes** — detection is per-frame at 24 fps (`tools/soak_test.py`) |
 | Box vanishes 9 tries out of 10 | **Yes with `trigger: neuron`** — poster A fires the class at 0.97 and the box goes for 50/50 frames. **No with `trigger: detector`**: the real attack manages 27–31% (`tools/validate_demo.py`, reasoning in `docs/PATCH_NOTES.md`) |
 | The decoy visibly fails | **Yes** — poster B measured `0.000` on the trigger class at every size and every `imgsz`; box stays up 49/50 frames |
 | Runs unattended without crashing | **Yes** — 4000-frame soak, 0 errors, automatic camera reconnect, no exception can end the frame loop |
@@ -382,6 +368,6 @@ Measured, not assumed. Every row names the command that reproduces it.
 
 **Be straight about which trigger is running.** With `neuron`, poster A really is
 controlling the model's output — it was optimised to do exactly that — but the
-child is not invisible and the detector is not being fooled. `S` switches to the
+user is not invisible and the detector is not being fooled. `S` switches to the
 honest attack in front of anyone who asks, and `docs/PATCH_NOTES.md` has the
 numbers to show them.

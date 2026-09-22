@@ -235,6 +235,163 @@ class PuffBurst:
 
 
 # --------------------------------------------------------------------------
+# robot vision
+# --------------------------------------------------------------------------
+
+class MatrixView:
+    """Green falling-digit rain for the robot panel.
+
+    Every glyph is a digit 0-9 that IS the brightness of that patch of the
+    frame, so the effect is also the lesson: the robot does not see a picture,
+    it sees a grid of numbers. The falling drops use the film's own code --
+    mirrored half-width katakana plus a few digits and symbols -- when a font
+    with katakana is on the machine (macOS ships Hiragino), and fall back to
+    plain digits otherwise. Only the glyphs are lit: each stroke takes the
+    brightness of the pixels under it, and a soft phosphor glow around them
+    keeps the user and the poster recognisable from 3 m. An optional `ghost`
+    blends a faint copy of the real frame in behind the code as well.
+
+    Rendered on a fixed grid at panel resolution (~9 ms), then scaled back to
+    the frame size so the boxes and labels drawn afterwards keep their
+    coordinates and stay in full colour on top.
+    """
+
+    CW, CH = 8, 12                     # glyph cell, px at the 800x450 panel
+    GLITCH_S = 1.2                     # how long the "lost you" glitch lasts
+    # The film's rain: half-width katakana (drawn mirrored), digits, symbols.
+    RAIN = ("ｦｱｳｴｵｶｷｹｺｻｼｽｾｿﾀﾂﾃﾅﾆﾇﾈﾊﾋﾎﾏﾐﾑﾒﾓﾔﾕﾗﾘﾜ"
+            "0123456789Z:.\"=*+-<>¦|")
+    FONTS = ("/System/Library/Fonts/ヒラギノ角ゴシック W6.ttc",   # bold reads from afar
+             "/System/Library/Fonts/ヒラギノ角ゴシック W4.ttc",
+             "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+             "/Library/Fonts/Arial Unicode.ttf")
+
+    def __init__(self, w: int = 800, h: int = 450, seed: int = 0,
+                 font: str | None = None, ghost: float = 0.0,
+                 stroke_detail: bool = True, glow: float = 1.2) -> None:
+        self.cols, self.rows = w // self.CW, h // self.CH
+        self.W, self.H = self.cols * self.CW, self.rows * self.CH
+        self._rng = np.random.default_rng(seed)
+        self._atlas = self._build_atlas(font)
+        r = self._rng
+        self._head = r.uniform(-self.rows, self.rows, self.cols)
+        self._speed = r.uniform(0.3, 1.0, self.cols)
+        self._trail = r.uniform(8, 25, self.cols)
+        self._noise = self._rain_glyphs((self.rows, self.cols))
+        self._rowix = np.arange(self.rows, dtype=np.float32)[:, None]
+        self._ghost_tint = np.array([0.3, 1.0, 0.3], np.float32)
+        self.ghost = ghost                   # faint copy of the frame behind the code
+        self.stroke_detail = stroke_detail   # light strokes by per-pixel brightness
+        self.glow = glow                     # phosphor halo around each glyph
+        self._glitch_box: tuple[int, int, int, int] | None = None
+        self._glitch_until = 0.0
+
+    def _build_atlas(self, font: str | None) -> np.ndarray:
+        """Glyphs 0-9 are the readable brightness digits; the rest is rain."""
+        path = next((p for p in (font, *self.FONTS) if p and os.path.exists(p)),
+                    None)
+        if path is None:
+            log.warning("no katakana font found; matrix rain uses digits only")
+            atlas = np.zeros((10, self.CH, self.CW), np.float32)
+            for i in range(10):
+                cell = np.zeros((self.CH, self.CW), np.uint8)
+                cv2.putText(cell, str(i), (1, self.CH - 2),
+                            cv2.FONT_HERSHEY_PLAIN, 0.75, 255, 1, cv2.LINE_AA)
+                atlas[i] = cell / 255.0
+            return atlas
+
+        pil = ImageFont.truetype(path, self.CH - 1)
+        chars = [(c, False) for c in "0123456789"] + [(c, True) for c in self.RAIN]
+        atlas = np.zeros((len(chars), self.CH, self.CW), np.float32)
+        for i, (c, mirror) in enumerate(chars):
+            im = Image.new("L", (self.CW * 2, self.CH * 2), 0)
+            ImageDraw.Draw(im).text((self.CW, self.CH), c, 255, font=pil,
+                                    anchor="mm")
+            g = np.asarray(im)[self.CH // 2:self.CH // 2 + self.CH,
+                               self.CW // 2:self.CW // 2 + self.CW]
+            atlas[i] = (g[:, ::-1] if mirror else g) / 255.0
+        return atlas
+
+    def _rain_glyphs(self, shape) -> np.ndarray:
+        n = len(self._atlas) - 10
+        if n <= 0:                                   # digit-only fallback
+            return self._rng.integers(0, 10, shape)
+        return 10 + self._rng.integers(0, n, shape)
+
+    def glitch(self, box_frac: tuple[float, float, float, float],
+               now: float) -> None:
+        """Scramble the cells where the user just vanished, box in 0..1 units."""
+        x1, y1, x2, y2 = box_frac
+        self._glitch_box = (int(np.clip(x1, 0, 1) * self.cols),
+                            int(np.clip(y1, 0, 1) * self.rows),
+                            int(np.ceil(np.clip(x2, 0, 1) * self.cols)),
+                            int(np.ceil(np.clip(y2, 0, 1) * self.rows)))
+        self._glitch_until = now + self.GLITCH_S
+
+    def render(self, bgr: np.ndarray, now: float) -> np.ndarray:
+        """Return the rain version of `bgr`, same size as the input."""
+        oh, ow = bgr.shape[:2]
+        img = cv2.resize(bgr, (self.W, self.H), interpolation=cv2.INTER_AREA)
+        grey = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        small = cv2.resize(grey, (self.cols, self.rows),
+                           interpolation=cv2.INTER_AREA).astype(np.float32) / 255
+        edges = cv2.resize(cv2.Canny(grey, 60, 140), (self.cols, self.rows),
+                           interpolation=cv2.INTER_AREA).astype(np.float32) / 255
+
+        # a few cells flicker to a new random digit each frame
+        r = self._rng
+        flip = r.random(self._noise.shape) < 0.03
+        self._noise[flip] = self._rain_glyphs(int(flip.sum()))
+
+        # rain: bright head, fading trail, one drop per column
+        self._head += self._speed
+        wrap = self._head - self._trail > self.rows
+        self._head[wrap] = -r.uniform(0, self.rows, int(wrap.sum()))
+        d = self._head[None, :] - self._rowix
+        rain = np.where((d >= 0) & (d < self._trail), 1 - d / self._trail, 0.0)
+        heads = (d >= 0) & (d < 1)
+
+        digit = np.minimum((small * 10).astype(np.intp), 9)
+        glyph = np.where(rain > 0.6, self._noise, digit)
+        inten = 0.08 + 1.1 * small ** 1.3 + 0.9 * edges
+        inten = inten * (0.7 + 0.5 * rain) + 0.35 * rain
+
+        red = None
+        left = self._glitch_until - now
+        if self._glitch_box is not None and left > 0:
+            gx1, gy1, gx2, gy2 = self._glitch_box
+            k = left / self.GLITCH_S                  # 1 -> 0 as it fades
+            region = (slice(gy1, gy2), slice(gx1, gx2))
+            glyph[region] = self._rain_glyphs(glyph[region].shape)
+            inten[region] = np.maximum(inten[region], 0.9 * k)
+            red = np.zeros((self.rows, self.cols), np.float32)
+            red[region] = k
+
+        tiles = self._atlas[glyph]                    # rows, cols, CH, CW
+        mono = (tiles * inten[..., None, None]).transpose(0, 2, 1, 3) \
+            .reshape(self.H, self.W)
+        if self.stroke_detail:
+            px = grey.astype(np.float32) / 255
+            mono *= 0.35 + 1.0 * px ** 0.9
+        if self.glow > 0:
+            mono += self.glow * cv2.GaussianBlur(mono, (0, 0), 1.6)
+        out = np.empty((self.H, self.W, 3), np.float32)
+        out[..., 1] = mono
+        out[..., 0] = out[..., 2] = mono * 0.25
+        hm = np.repeat(np.repeat(heads, self.CH, 0), self.CW, 1)
+        out[hm] = mono[hm, None]                      # white drop heads
+        if red is not None:
+            rm = np.repeat(np.repeat(red, self.CH, 0), self.CW, 1)
+            out[..., 2] = np.maximum(out[..., 2], mono * rm)
+            out[..., 1] *= 1 - 0.8 * rm
+        if self.ghost > 0:
+            out = 0.7 * out + self.ghost * (img.astype(np.float32) / 255) \
+                * self._ghost_tint
+        out = np.clip(out * 255, 0, 255).astype(np.uint8)
+        return cv2.resize(out, (ow, oh), interpolation=cv2.INTER_NEAREST)
+
+
+# --------------------------------------------------------------------------
 # mascot
 # --------------------------------------------------------------------------
 

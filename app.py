@@ -215,6 +215,9 @@ class Show:
             entries.append(e)
         self.branding = overlay.Branding(entries, str(brand.get("text", "")))
         self.puff = overlay.PuffBurst()
+        self.robot_style = str(cfg["ui"].get("robot_style", "matrix"))
+        self.matrix = overlay.MatrixView(
+            PANEL_W, PANEL_H, ghost=float(cfg["ui"].get("matrix_ghost", 0.0)))
         self.audio = Audio(os.path.join(ROOT, "assets/sounds"),
                            bool(cfg["sound"]["enabled"]) and not args.mute,
                            float(cfg["sound"]["volume"]))
@@ -236,7 +239,7 @@ class Show:
         self._expert_box: Detection | None = None
         self._last_box: Detection | None = None
         self._candidates: list[Detection] = []
-        self._last_frame_w = 1280
+        self._last_frame_w, self._last_frame_h = 1280, 720
         self._last_frame: np.ndarray | None = None
         self._last_frame_at = 0.0
         self._canvas = np.full((CANVAS_H, CANVAS_W, 3),
@@ -341,7 +344,7 @@ class Show:
                 detect_frame = warp_into(frame, patch, quad)
 
         h, w = detect_frame.shape[:2]
-        self._last_frame_w = w
+        self._last_frame_w, self._last_frame_h = w, h
         min_area = float(self.cfg["stability"]["min_box_area_frac"]) * w * h
         if self.trigger == "neuron":
             # One pass gets both: the person, and the class the patch lights up.
@@ -376,6 +379,8 @@ class Show:
         if self.mirror:
             clean = cv2.flip(clean, 1)
             robot = cv2.flip(robot, 1)
+        if self.robot_style == "matrix":
+            robot = self.matrix.render(robot, time.monotonic())
         self._draw_robot_view(robot)
         return clean, robot
 
@@ -433,6 +438,10 @@ class Show:
                 if self.mirror:
                     cx = self._last_frame_w - cx
                 self.puff.fire(cx, cy, max(b.x2 - b.x1, b.y2 - b.y1))
+                x1, y1, x2, y2 = self._disp(b, self._last_frame_w)
+                fw, fh = self._last_frame_w, self._last_frame_h
+                self.matrix.glitch((x1 / fw, y1 / fh, x2 / fw, y2 / fh),
+                                   time.monotonic())
         if t.just_found:
             seconds = self._frozen_time
             self._frozen_until = time.monotonic() + 3.0
@@ -635,6 +644,9 @@ class Show:
         elif k in (ord("s"), ord("S")):
             self.trigger = "detector" if self.trigger == "neuron" else "neuron"
             log.warning("trigger -> %s", self.trigger)
+        elif k in (ord("m"), ord("M")):
+            self.robot_style = "camera" if self.robot_style == "matrix" else "matrix"
+            log.info("robot view -> %s", self.robot_style)
         elif k in (ord("v"), ord("V")):
             self._force_vanish = not self._force_vanish
             log.warning("manual force-vanish %s",

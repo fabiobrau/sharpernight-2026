@@ -73,6 +73,13 @@ ui:
   hide_cursor: true
   font: assets/fonts/Fredoka.ttf
   show_fps: false
+  robot_style: matrix    # matrix | camera -- the right-hand panel. `matrix` draws
+                         # it as falling green digits, each one the brightness
+                         # of that spot: the robot sees numbers, not a picture.
+                         # Press M to switch live.
+  matrix_ghost: 0.0      # 0 = only the glyphs are lit. Raise to ~0.4 to blend a
+                         # faint copy of the camera in behind them if the room
+                         # is too bright to make people out.
   # Cartoon palette (BGR, because OpenCV).
   colors:
     box: [60, 220, 255]        # amber

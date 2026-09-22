@@ -56,6 +56,7 @@ build. `tools/make_assets.py` regenerates them if you want to change them.
 | `R` | reset the scoreboard |
 | `E` | expert mode — run a second, newer detector side by side |
 | `S` | switch trigger: real detector ⇄ neuron (§4) |
+| `M` | robot panel: Matrix digits ⇄ plain camera |
 | `V` | manual force-vanish, any mode — the operator's override |
 | `1` `2` `0` | *`--mode virtual` only*: pick which image is warped in (magic / dog / none) |
 

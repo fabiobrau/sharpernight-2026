@@ -5,7 +5,9 @@ model:
   # The detector the posters act on. MUST match patch.target_model below.
   name: yolov8n
   weights: assets/models/yolov8n.pt
-  device: mps            # mps | cpu | cuda
+  device: auto           # auto | cuda | mps | cpu -- auto picks CUDA (Ubuntu +
+                         # NVIDIA GPU), else MPS (Apple Silicon), else CPU.
+                         # Override per-run with --device without editing this.
   imgsz: 1280            # Drives how small a poster can be. The trigger class
                          # fires from ~100 px at 1280, ~140 px at 960, and needs
                          # a huge poster at 640. 1280 lets an A4 work out to 2 m

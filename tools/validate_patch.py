@@ -71,10 +71,14 @@ def apply_patch(frame, box, patch_bgr, scale):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--scales", default="0.20,0.25,0.30")
-    ap.add_argument("--device", default="mps")
+    ap.add_argument("--device", default="auto", choices=("auto", "cuda", "mps", "cpu"))
     ap.add_argument("--models", default="yolov8n,yolov8s,yolov5nu,yolov9t,yolov10n")
     ap.add_argument("--save-dir", default="")
     args = ap.parse_args()
+
+    sys.path.insert(0, ROOT)
+    from detector import resolve_device
+    args.device = resolve_device(args.device)
 
     global DEVICE
     DEVICE = args.device

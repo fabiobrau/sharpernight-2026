@@ -19,6 +19,7 @@ import sys
 import time
 
 # Some MPS kernels still fall back to CPU; set this before torch is imported.
+# Harmless (and unused) on CUDA/CPU-only machines like an Ubuntu laptop.
 os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
 
 import cv2
@@ -187,7 +188,8 @@ class Show:
         self.fullscreen = bool(cfg["ui"]["fullscreen"])
 
         m = cfg["model"]
-        self.detector = Detector(os.path.join(ROOT, m["weights"]), m["device"],
+        device = args.device or m.get("device", "auto")
+        self.detector = Detector(os.path.join(ROOT, m["weights"]), device,
                                  m["imgsz"], float(m["conf"]), list(m["classes"]),
                                  name=m["name"])
         self.expert_detector = None
@@ -195,7 +197,7 @@ class Show:
                 os.path.join(ROOT, cfg["expert"]["weights"])):
             try:
                 self.expert_detector = Detector(
-                    os.path.join(ROOT, cfg["expert"]["weights"]), m["device"],
+                    os.path.join(ROOT, cfg["expert"]["weights"]), device,
                     m["imgsz"], float(m["conf"]), list(m["classes"]),
                     name=cfg["expert"]["name"])
             except Exception as exc:
@@ -702,6 +704,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--camera", type=int, default=None,
                     help="camera index; never guessed, pick it explicitly")
     ap.add_argument("--config", default=os.path.join(ROOT, "config.yaml"))
+    ap.add_argument("--device", choices=("auto", "cuda", "mps", "cpu"),
+                    default=None,
+                    help="inference device; overrides config.yaml's model.device. "
+                         "auto picks CUDA if present, else MPS, else CPU.")
     ap.add_argument("--poster", choices=("adversarial", "dog", "none"),
                     default=None)
     ap.add_argument("--windowed", action="store_true")

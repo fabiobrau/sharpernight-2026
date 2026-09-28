@@ -24,7 +24,7 @@ sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from compositor import BoardTracker, make_board_image, warp_into  # noqa: E402
-from detector import Detector  # noqa: E402
+from detector import Detector, resolve_device  # noqa: E402
 from framing import close_framing  # noqa: E402
 
 W, H = 1280, 720
@@ -54,12 +54,13 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--img-dir", default="")
     ap.add_argument("--n", type=int, default=60)
-    ap.add_argument("--device", default="mps")
+    ap.add_argument("--device", default="auto", choices=("auto", "cuda", "mps", "cpu"))
     ap.add_argument("--conf", type=float, default=0.4)
     ap.add_argument("--board-frac", default="0.30,0.40,0.50",
                     help="board side as a fraction of body height")
     ap.add_argument("--save-dir", default="")
     args = ap.parse_args()
+    args.device = resolve_device(args.device)
 
     img_dir = args.img_dir or os.environ.get("COCO_DIR", "")
     cache = os.path.join(os.path.dirname(img_dir.rstrip("/")), "person_index.json")

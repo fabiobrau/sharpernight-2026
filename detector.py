@@ -1,6 +1,10 @@
-"""Ultralytics wrapper: MPS inference, largest-person tracking, flicker control.
+"""Ultralytics wrapper: CUDA/MPS/CPU inference, largest-person tracking, flicker
+control.
 
-Two things live here:
+Three things live here:
+  * `resolve_device` -- turns "auto" (or a stale explicit choice) into whatever
+    accelerator is actually present, so the same config.yaml runs unchanged on
+    a Mac (MPS) or an Ubuntu box with an NVIDIA GPU (CUDA), falling back to CPU.
   * `Detector`  -- one YOLO model, one `detect()` call, never raises at runtime.
   * `StableTracker` -- turns noisy per-frame detections into the steady
     "is there a human right now?" signal the show depends on.
@@ -15,6 +19,50 @@ from dataclasses import dataclass
 import numpy as np
 
 log = logging.getLogger("invisible.detector")
+
+
+def resolve_device(requested: str = "auto") -> str:
+    """Pick the accelerator to run on.
+
+    "auto" (the default) probes for CUDA first, then Apple's MPS, and falls
+    back to CPU. An explicit choice ("cuda", "mps", "cpu") is honoured if
+    available and otherwise downgraded with a warning instead of crashing --
+    so a config.yaml written on a Mac (`device: mps`) still runs on an Ubuntu
+    laptop with an NVIDIA GPU (upgrading to cuda) or without one (cpu).
+    """
+    requested = (requested or "auto").strip().lower()
+
+    try:
+        import torch
+    except Exception as exc:  # pragma: no cover - torch always required elsewhere
+        log.warning("torch not importable (%s); forcing cpu", exc)
+        return "cpu"
+
+    has_cuda = bool(getattr(torch, "cuda", None) and torch.cuda.is_available())
+    has_mps = bool(getattr(torch.backends, "mps", None)
+                   and torch.backends.mps.is_available())
+
+    if requested == "auto":
+        if has_cuda:
+            chosen = "cuda"
+        elif has_mps:
+            chosen = "mps"
+        else:
+            chosen = "cpu"
+        log.info("device: auto -> %s", chosen)
+        return chosen
+
+    if requested == "cuda" and not has_cuda:
+        chosen = "mps" if has_mps else "cpu"
+        log.warning("device: 'cuda' requested but not available; using %s", chosen)
+        return chosen
+
+    if requested == "mps" and not has_mps:
+        chosen = "cuda" if has_cuda else "cpu"
+        log.warning("device: 'mps' requested but not available; using %s", chosen)
+        return chosen
+
+    return requested
 
 
 @dataclass
@@ -44,7 +92,7 @@ class ModelMismatch(RuntimeError):
 
 
 class Detector:
-    def __init__(self, weights: str, device: str = "mps", imgsz: int = 640,
+    def __init__(self, weights: str, device: str = "auto", imgsz: int = 640,
                  conf: float = 0.4, classes: list[int] | None = None,
                  name: str = "") -> None:
         from ultralytics import YOLO  # imported late: keeps --help instant
@@ -57,7 +105,8 @@ class Detector:
         self.imgsz = imgsz
         self.conf = conf
         self.classes = classes if classes is not None else [0]
-        self.device = device
+        self.device = resolve_device(device)
+        log.info("%s: running on %s", self.name, self.device)
         self.model = YOLO(weights)
         self._fail_count = 0
         self._calls = 0
@@ -80,14 +129,18 @@ class Detector:
                 classes=self.classes if classes is None else classes,
                 device=self.device, verbose=False)[0]
             self._fail_count = 0
-            # Torch's MPS allocator creeps upward over a long session (~4 MB per
-            # 1000 frames). Harmless in a short run, ~1 GB over a three-hour
-            # afternoon, so evict periodically. Cheap: once every ~20 s.
+            # Torch's MPS/CUDA allocators creep upward over a long session
+            # (~4 MB per 1000 frames on MPS). Harmless in a short run, ~1 GB
+            # over a three-hour afternoon, so evict periodically. Cheap: once
+            # every ~20 s. CPU has no allocator cache to evict.
             self._calls += 1
-            if self._calls % 600 == 0:
+            if self._calls % 600 == 0 and self.device in ("mps", "cuda"):
                 try:
                     import torch
-                    torch.mps.empty_cache()
+                    if self.device == "mps":
+                        torch.mps.empty_cache()
+                    else:
+                        torch.cuda.empty_cache()
                 except Exception:
                     pass
         except Exception as exc:

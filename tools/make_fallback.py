@@ -21,6 +21,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 import overlay  # noqa: E402
+from detector import resolve_device  # noqa: E402
 from strings import Strings  # noqa: E402
 
 W, H = 1280, 720
@@ -62,8 +63,9 @@ def main() -> None:
     ap.add_argument("--img-dir", default="")
     ap.add_argument("--n", type=int, default=5)
     ap.add_argument("--lang", default="it")
-    ap.add_argument("--device", default="mps")
+    ap.add_argument("--device", default="auto", choices=("auto", "cuda", "mps", "cpu"))
     args = ap.parse_args()
+    args.device = resolve_device(args.device)
 
     from ultralytics import YOLO
     S = Strings(args.lang)

@@ -1,11 +1,21 @@
-# Verified on macOS 15 (Apple Silicon), Python 3.13.
-# Install into a venv created with --system-site-packages if torch is already
-# present system-wide, otherwise plain `python3 -m venv .venv` is fine.
+# Verified on macOS 15 (Apple Silicon) and Ubuntu 22.04 + NVIDIA/CUDA, Python
+# 3.13. Install into a venv created with --system-site-packages if torch is
+# already present system-wide, otherwise plain `python3 -m venv .venv` is fine.
+#
+# On Ubuntu with an NVIDIA GPU, plain `pip install torch` from PyPI may give
+# you a CPU-only wheel depending on your pip/platform defaults. If
+# `python -c "import torch; print(torch.cuda.is_available())"` prints False
+# but `nvidia-smi` works, install the CUDA build explicitly instead, e.g.:
+#   pip install torch --index-url https://download.pytorch.org/whl/cu124
+# (pick the cuXXX tag matching your installed CUDA driver; see
+# https://pytorch.org/get-started/locally/). The app itself needs no code
+# changes either way -- `model.device: auto` in config.yaml (or `--device`)
+# picks CUDA automatically once torch reports it available.
 
 ultralytics==8.4.158
 opencv-python==4.13.0.92   # NOT opencv-python 5.x: see note in audio.py
 numpy==2.5.3
-torch>=2.5                 # 2.10.0 tested
+torch>=2.5                 # 2.10.0 tested; see the CUDA note above on Ubuntu
 sounddevice==0.5.2         # audio backend; pygame is deliberately not used
 PyYAML>=6.0
 Pillow>=10.0

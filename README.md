@@ -6,8 +6,8 @@ how long they stayed invisible; the best times of the day go on a board.
 
 Built for visitors aged 6-12 and the parents reading over their shoulder.
 
-Runs on an Apple Silicon Mac, **offline**, and **writes nothing to disk** — no
-frames, no video, no faces.
+Runs on an Apple Silicon Mac or an Ubuntu machine (CUDA GPU or CPU-only),
+**offline**, and **writes nothing to disk** — no frames, no video, no faces.
 
 ```bash
 python app.py --lang it
@@ -17,7 +17,12 @@ python app.py --lang it
 
 ## 1. Quick start
 
-Tested on macOS 15, Apple Silicon, **Python 3.13** (3.11+ should be fine).
+Tested on macOS 15 (Apple Silicon, MPS) and Ubuntu 22.04 (NVIDIA/CUDA and
+CPU-only), **Python 3.13** (3.11+ should be fine). The inference device is
+auto-detected (`model.device: auto` in config.yaml, or override with
+`--device cuda|mps|cpu`) — no config changes needed between machines. If
+`pip install torch` gives you a CPU-only build on an Ubuntu GPU box, see the
+CUDA install note at the top of `requirements.txt`.
 
 ```bash
 git clone <this repo> && cd sharper-demo
@@ -325,7 +330,7 @@ footer says so in words a parent can read over the user's shoulder.
 
 ```
 app.py            main loop, modes, keybindings
-detector.py       ultralytics wrapper, MPS, largest-box tracking, flicker control
+detector.py       ultralytics wrapper, CUDA/MPS/CPU auto-detect, largest-box tracking, flicker control
 compositor.py     ArUco detection + homography warp (Mode B)
 overlay.py        cartoon box, confidence bar, particles, mascot, cached text
 scoreboard.py     session-only top-5 invisibility times

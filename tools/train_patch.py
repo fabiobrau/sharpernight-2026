@@ -218,7 +218,7 @@ def main() -> None:
     ap.add_argument("--size", type=int, default=256)
     ap.add_argument("--lr", type=float, default=0.02)
     ap.add_argument("--images", type=int, default=500)
-    ap.add_argument("--device", default="mps")
+    ap.add_argument("--device", default="auto", choices=("auto", "cuda", "mps", "cpu"))
     ap.add_argument("--weights", default="assets/models/yolov8n.pt")
     ap.add_argument("--anchor", default="assets/patches/exp53.png")
     ap.add_argument("--w-anchor", type=float, default=2.5)
@@ -241,6 +241,10 @@ def main() -> None:
     ap.add_argument("--wide-framing", action="store_true",
                     help="train on whole photos instead of demo-like close framing")
     args = ap.parse_args()
+
+    sys.path.insert(0, ROOT)
+    from detector import resolve_device
+    args.device = resolve_device(args.device)
 
     global SCALE_RANGE
     SCALE_RANGE = (args.scale_min, args.scale_max)
